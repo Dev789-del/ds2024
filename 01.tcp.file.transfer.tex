@@ -1,0 +1,156 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{float}
+\title{Distributed Systems Labwork 1}
+\author{Nguyen Quang Huy BI11-113}
+\date{23 March 2024}
+
+\begin{document}
+
+\maketitle
+
+\vspace{16cm}
+
+\section{Protocol Design}
+We used predefined message system to create handshaking.It helps to make sure that the connection and transmission between server and client is consistent. 
+\\When the connection is established,the server will send a message, if the client verify the message then it will start to do the task and send information to the server.After that, the process starts again until the file is transferred.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=1.0\textwidth]{Server_Client.png}
+\caption{The Protocol}
+\label{fig:figure1}
+\end{figure}
+
+\section{System organizing}
+The system contains one client and one server connecting to each other by using socket.For both client and server, we create a socket first before executing the file transfer. The server then binds to a port and listens to the client's behavior.The client initializes its address then connects to the server.
+\\
+To transfer file, the server first sends a message to notify that it's ready to receive file.The client confirms the message, request user to input the file's name and send it the server. The server receives it,sends message notifying that file's name is received. 
+\\The client then gets the file's length and sends it to the server.The server receives it and sends back a message notifying the file's length received.After confirming that message, the client sends the file's data to the server and waits until the process finished. The server receives it and ask the user to press a button in order to start the process over again
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Client.drawio.png}
+    \caption{Client}
+    \label{fig:figure2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Server.png}
+    \caption{Server}
+    \label{fig:figure3}
+\end{figure}
+\section{File transfer implementation}
+\paragraph{-About Server: \\
++Below are server variable and we create a socket to define server endpoint connection\\
+}
+\begin{verbatim}
+    int ss, cli, pid;
+    struct sockaddr_in ad;
+    char s[100];
+    socklen_t ad_length = sizeof(ad);
+\end{verbatim}
+\paragraph{+Next, we going to create the locket, bind it to port with value 12345 and listen the socket signal at the end\\}
+
+\begin{verbatim}
+    // create the socket
+    ss = socket(AF_INET, SOCK_STREAM, 0);
+    // bind the socket to port 12345
+    memset(&ad, 0, sizeof(ad));
+    ad.sin_family = AF_INET;
+    ad.sin_addr.s_addr = INADDR_ANY;
+    ad.sin_port = htons(12345);
+    bind(ss, (struct sockaddr*)&ad, ad_length);
+    // then listen
+    listen(ss, 0);
+\end{verbatim}
+\paragraph{+Finally, we loop the server with while keyword along with open connection and access the received file\\}
+\begin{verbatim}
+    while (1) {
+        // an incoming connection
+        cli = accept(ss, (struct sockaddr*)&ad, &ad_length);
+        pid = fork();
+        if (pid == 0) {
+            // I'm the son, I'll serve this client
+            printf("client connected\n");
+
+            FILE* file;
+            file = fopen("recieve.txt", "w");
+            if (file == NULL) {
+            	printf("Cannot open file");
+            } else {
+            	printf("Start writing file");
+            }
+
+            char buffer[1024];
+            while (1) {int i = recv(cli, buffer, sizeof(buffer), 0);
+                if (i <= 0) {
+                	break;
+                }
+                fprintf(file, "%s", buffer);
+                memset(&buffer, 0, sizeof(buffer));
+            }
+        } else {
+        // I'm the father, continue the loop to accept more clients
+            continue;
+        }
+    }
+\end{verbatim}
+
+\paragraph{-About Client:}
+\paragraph{+The same to the server, we also define necessary variables and create socket to define endpoint for connection.There is a slightly different that in client environment, we need process id and client to be defined first.After that, we initialize the address to connect to the server}
+\begin{verbatim}
+    int so;
+    char s[200];
+    struct sockaddr_in ad;
+    FILE *pfile;
+    long filelen;
+
+    socklen_t ad_length = sizeof(ad);
+    struct hostent *hep;
+
+    //Create socket
+
+    int serv = socket(AF_INET, SOCK_STREAM, 0);
+
+    //Init address
+    hep = gethostbyname(argv[0]);
+    if (hep == NULL) {
+        perror("gethostbyname");
+        exit(1);
+    }
+    memset(&ad, 0, sizeof(ad));
+    ad.sin_family = AF_INET;
+    ad.sin_addr = *(struct in_addr *)hep->h_addr_list[0];
+    ad.sin_port = htons(12345);
+
+    //Connect to server
+    if (connect(serv, (struct sockaddr *)&ad, ad_length) == -1) {
+        perror("connect");
+        exit(1);
+    }
+\end{verbatim}
+
+\paragraph{+Next, we try to open the sent file and check if it is empty or not.Then, we define buffer to read file and send it to the server after the previous task done}
+\begin{verbatim}
+    //Open sender file and check if it is empty
+    pfile = fopen("send.txt", "r");
+    if (pfile == NULL) {
+        printf("Failed to open file.\n");
+        exit(1);
+    }
+    //Define buffer to read file and send to server
+    char buffer[1024] = {0};
+    while (fgets(buffer, sizeof(buffer), pfile) != NULL) {
+        int i = send(serv, buffer, sizeof(buffer), 0);
+        if (i == -1) {
+            printf("Send data fail.\n");
+            exit(1);
+        }
+        memset(&buffer, 0, sizeof(buffer));
+    }
+
+    close(serv);
+    return 0;
+\end{verbatim}
+\end{document}
